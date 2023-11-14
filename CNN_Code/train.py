@@ -19,6 +19,7 @@ from  sklearn import  metrics
 # ==================================================
 
 # Data loading params
+#定义一个全局浮点数变量，三个参数分别是变量名称、默认值、用法描述
 tf.flags.DEFINE_float("dev_sample_percentage", .1, "Percentage of the training data to use for validation")
 tf.flags.DEFINE_string("source", "source", "source projects")
 tf.flags.DEFINE_string("target", "target", "target project")
@@ -28,20 +29,27 @@ tf.flags.DEFINE_string("target", "target", "target project")
 tf.flags.DEFINE_integer("embedding_dim",300, "Dimensionality of character embedding (default: 128)")
 tf.flags.DEFINE_string("filter_sizes", "1,2,3,4,5,6", "Comma-separated filter sizes (default: '3,4,5')")
 tf.flags.DEFINE_integer("num_filters", 128, "Number of filters per filter size (default: 128)")
+#设置丢弃法参数防止过拟合
 tf.flags.DEFINE_float("dropout_keep_prob", 0.5, "Dropout keep probability (default: 0.5)")
 tf.flags.DEFINE_float("l2_reg_lambda", 0.2, "L2 regularizaion lambda (default: 0)")
 
 # Training parameters
 tf.flags.DEFINE_integer("batch_size", 256, "Batch Size (default: 64)")
 tf.flags.DEFINE_integer("num_epochs", 200, "Number of training epochs (default: 1000)")
+#evaluate_every，多少个训练周期结束后对模型在开发集上的性能进行评估
 tf.flags.DEFINE_integer("evaluate_every", 1, "Evaluate model on dev set after this many epochs (default: 100)")
+#checkpoint_every，多少步训练后保存模型
 tf.flags.DEFINE_integer("checkpoint_every", 100, "Save model after this many steps (default: 100)")
 # Misc Parameters
+#这个参数决定了是否允许 TensorFlow 在设备上进行软放置。如果设置为 True，那么当某些操作无法在 GPU 上执行时，TensorFlow 会自动将它们放置在 CPU 上。这可以帮助我们在 GPU 不支持某些操作时仍然能够运行模型。
 tf.flags.DEFINE_boolean("allow_soft_placement", False, "Allow device soft device placement")
+#这个参数决定了是否记录操作在设备上的放置情况。如果设置为 True，那么每次操作被放置在设备上时，都会记录日志。这可以帮助我们了解模型的运行情况，例如，哪些操作被放置在了 GPU 上，哪些操作被放置在了 CPU 上。这对于优化模型的性能非常有用。
 tf.flags.DEFINE_boolean("log_device_placement", False, "Log placement of ops on devices")
 
 
+#FLAGS是一个对象，获取所有通过tf.flags.DEFINE定义的全局变量
 FLAGS = tf.flags.FLAGS
+#解析命令行参数，根据参数的名称和值来设置对应的全局变量
 FLAGS._parse_flags()
 
 
@@ -70,10 +78,10 @@ def train_model(allow_save_model = True, print_intermediate_results = True, d_lo
     # load each source project
 
     source_text = np.array([])   # 所有源项目的注释
-    source_y0 = np.array([])     # 素有源项目的标记
+    source_y0 = np.array([])     # 所有源项目的标记
 
     source_file_path = "./cross_project/" + pname + '/train/'
-    source_files = list()
+    source_files = list()    
 
     # SATD nonSATD 两个文件
     for class_name in class_names:
@@ -85,6 +93,7 @@ def train_model(allow_save_model = True, print_intermediate_results = True, d_lo
     # 输出项目名 和该项目下所有的注释数目
     print(pname + ": " + str(len(tmp_text)) + " sentences")
     
+    #0表示沿着行，两个numpy数组沿着行进行拼接
     source_text = np.concatenate([source_text, tmp_text], 0)  # 将暂存的注释拼接到源项目注释中
     # 没有标记时 直接赋值 否则进行拼接
     if len(source_y0) == 0:
@@ -95,16 +104,21 @@ def train_model(allow_save_model = True, print_intermediate_results = True, d_lo
 
     # Build 根据所有已分词好的文本建立好一个词典，然后找出每个词在词典中对应的索引，不足长度或者不存在的词补0
     # 找出注释中最长的注释长度，并和100比较，取两者中较小的
+    #对source_text中的每个句子x分割为单词并计算单词数量
     max_document_length = min(100, max([len(x.split(" ")) for x in source_text]))  
     # important here!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    
+    #创建一个词汇处理器，将文本转换为词向量，超过max_document_length数量的单词将背忽略
     vocab_processor     = learn.preprocessing.VocabularyProcessor(max_document_length)
+    #使用词汇处理器将source_text先用fit_transfirm进行拟合，然后转换为词向量
+    #再用list转换为列表，最后np.array转换为数组
     source_x0           = np.array(list(vocab_processor.fit_transform(source_text)))
     #  target_x = np.array(list(vocab_processor.fit_transform(target_text)))
     # =========================================================================print vocab============================================
     np.random.seed(10)
-    shuffle_indices = np.random.permutation(np.arange(len(source_y0))) # 在数据集中随机找一个索引
-    x_shuffled      = source_x0[shuffle_indices] # 找到随机的注释内容
-    y_shuffled      = source_y0[shuffle_indices] # 找到随机的注释标记
+    shuffle_indices = np.random.permutation(np.arange(len(source_y0))) # 生成一个随机排列的数组
+    x_shuffled      = source_x0[shuffle_indices] # 根据随机排列的数组打乱注释
+    y_shuffled      = source_y0[shuffle_indices] # 根据随机排列的数组打乱标签
 
     # Split train/test set 切分训练集和测试集
     # TODO: This is very crude, should use cross-validation
